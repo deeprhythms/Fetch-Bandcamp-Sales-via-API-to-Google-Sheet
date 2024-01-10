@@ -29,10 +29,12 @@ But let's get to it, the stuff below assumes you know your way around computers 
 * Name the project to something like 'Bandcamp Sales via API' or whatever
 4. Copy the attached Google Apps Script:
 * In the Google Apps Script editor, copy paste the script code to the editor window overwriting the default function myFunction stuff
-* Copy the four digit client_id and the long client_secret hash provided by Bandcamp over YOUR_CLIENT_ID and YOUR_CLIENT_SECRRET  
+* Copy the four digit client_id and the long client_secret hash provided by Bandcamp over YOUR_CLIENT_ID and YOUR_CLIENT_SECRRET
+
  // Your client ID and client secret from Bandcamp
 var clientId = 'YOUR_CLIENT_ID';
 var clientSecret = 'YOUR_CLIENT_SECRET';
+
 * Save the project
 * I've tried to comment the script so it's easy to follow, ie if you wish to modify the date range and whatnot.
 5. Authorize and Run the Script:
