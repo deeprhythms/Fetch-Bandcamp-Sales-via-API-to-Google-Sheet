@@ -1,9 +1,9 @@
 # Fetch-Bandcamp-Sales-via-API-to-Google-Sheet
 App Script to fetch Bandcamp Sales Data once a day via API to a Google Sheet
 
-useful!
+Useful!
 
-****** BRIEF'ISH INTRODUCTION TO WHAT IT DOES ****** 
+**BRIEF'ISH INTRODUCTION TO WHAT IT DOES**
 
 This script fetches yesterday's Bandcamp sales automatically via the Bandcamp API and appends those to the next empty row in a Google Sheet. So, if you'd like to start using it today, you can download a report and copy paste the rows to the sheet and then it adds stuff below those rows. But I advise you to first test the script by running it manually anyways. Read more about the API here. 
 
@@ -15,7 +15,7 @@ DISCLAIMER: I am no coder. I used ChatGPT to write this script so the only guara
 
 But let's get to it, the stuff below assumes you know your way around computers a little.
 
-****** HOW TO USE ****** 
+**HOW TO USE** 
 
 1. Request for Bandcamp API access
 * Easy to do here: https://bandcamp.com/contact?subj=API%20Access
