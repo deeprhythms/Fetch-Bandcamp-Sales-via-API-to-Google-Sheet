@@ -39,7 +39,10 @@ var clientSecret = 'YOUR_CLIENT_SECRET';
 * I've tried to comment the script so it's easy to follow, ie if you wish to modify the date range and whatnot.
 5. Authorize and Run the Script:
 * You need to authorize the script to access your Google Sheet and Bandcamp API when you first run it
-* IF you sold any tracks, releases or vinyl through Bandcamp yesterday, you should see data on the sheet - check that.
+* Optional: Uncomment the lines in code if you want to fetch data for a specific date range first and add the data range
+* Run the script
+* Optional: comment out the specific date range code
+* 'IF you sold any tracks, releases or vinyl through Bandcamp yesterday, you should see data on the sheet - check that.
 6. Set up Triggers:
 * To run this script daily, you can set up a trigger. In the Apps Script editor, go to Triggers
 * Click on the "+ Add Trigger" button and configure it to run fetchDataFromBandcamp function. Event Source: Time Driven, Select type: Day Timer, Time of day: 12pm to 1pm (my
