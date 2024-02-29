@@ -1,3 +1,4 @@
+// Function to fetch and process data with retry
 function fetchAndProcessDataWithRetry() {
   var MAX_RETRIES = 3; // Maximum number of retry attempts
   var RETRY_DELAY_SECONDS = 10; // Delay in seconds before retrying
@@ -27,8 +28,8 @@ function fetchDataFromBandcamp() {
   var oauthUrl = 'https://bandcamp.com/oauth_token';
 
   // Your client ID and client secret from Bandcamp
-  var clientId = '2082';
-  var clientSecret = 'xshZE9qzHdvWu3jP175HwQcmAPaSapy/ahDzs1iKCJ8=';
+  var clientId = 'YOUR_CLIENT_ID';
+  var clientSecret = 'YOUR_CLIENT_SECRET';
 
   // Request an initial access token
   var payload = {
@@ -63,8 +64,14 @@ function fetchDataFromBandcamp() {
         var yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
 
-        var formattedStartDate = Utilities.formatDate(yesterday, 'GMT', 'yyyy-MM-dd') + ' 00:00:00';
-        var formattedEndDate = Utilities.formatDate(yesterday, 'GMT', 'yyyy-MM-dd') + ' 23:59:59';
+        var formattedStartDate = Utilities.formatDate(yesterday, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 00:00:00';
+        var formattedEndDate = Utilities.formatDate(yesterday, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 23:59:59';
+
+        // Uncomment the lines below to fetch data for a specific date range
+        // var startDate = new Date('YYYY-MM-DD'); // Replace YYYY-MM-DD with your start date
+        // var endDate = new Date('YYYY-MM-DD'); // Replace YYYY-MM-DD with your end date
+        // var formattedStartDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 00:00:00';
+        // var formattedEndDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 23:59:59';
 
         // Set the Bandcamp Sales Report API endpoint URL
         var apiUrl = 'https://bandcamp.com/api/sales/2/sales_report';
@@ -114,7 +121,7 @@ function fetchDataFromBandcamp() {
         sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
         // Process and append the sales data to the sheet
-        if (salesData) {
+        if (salesData && Object.keys(salesData).length > 0) {
           var salesArray = [];
 
           // Extract and format the data as needed
@@ -171,14 +178,21 @@ function fetchDataFromBandcamp() {
               sale.sku
             ];
             salesArray.push(rowData);
-          }
-          // Log the sales data (uncomment this line when needed)
+
+            // Log the sales data (uncomment this line when needed)
             // Logger.log('Sales Data: ' + JSON.stringify(sale));
+          }
 
           // Append the sales data to the sheet, starting from the next available row
-          sheet.getRange(sheet.getLastRow() + 1, 1, salesArray.length, headers.length).setValues(salesArray);
+          var lastRow = sheet.getLastRow();
+          if (lastRow > 0) {
+            sheet.getRange(lastRow + 1, 1, salesArray.length, headers.length).setValues(salesArray);
+          } else {
+            // If there are no existing rows, start from the first row
+            sheet.getRange(1, 1, salesArray.length, headers.length).setValues(salesArray);
+          }
         } else {
-          Logger.log('No sales data found for the specified date for Band ID: ' + labelId);
+          Logger.log('No sales data found for the specified date range for Band ID: ' + labelId);
         }
       }
     } else {
@@ -244,3 +258,4 @@ function getBandIds(accessToken) {
     return [];
   }
 }
+// To the beat of the drum bang, to the beat of the drum bang bang
