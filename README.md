@@ -5,11 +5,10 @@ Useful!
 
 **BRIEF'ISH INTRODUCTION TO WHAT IT DOES**
 
-This script fetches yesterday's Bandcamp sales automatically via the Bandcamp API and appends those to the next empty row in a Google Sheet. So, if you'd like to start using it today, you can download a report and copy paste the rows to the sheet and then it adds stuff below those rows. But I advise you to first test the script by running it manually anyways. Read more about the API here. 
+This script fetches yesterday's Bandcamp sales automatically via the Bandcamp API and appends those to the next empty row in a Google Sheet. 
+If you'd like to start using it today, uncomment the lines in code to fetch data for a specific date range, add the data range in the cript and run the script. Comment out the date range part and the script now fetches yesterday's sales as by default.
 
-If you are willing to test it out, let me know how it works for you. I'd like to put it on Github so people can freely develop it further.
-
-NOTE: I have not implemented the merch functionality via Merch API. Vinyl sales are fetched though. If you sell merchandise like t-shirts, stickers etc. let me know if those are omitted from the report and I'll check what to do.
+I advise you to first test the script by running it manually. 
 
 DISCLAIMER: I am no coder. I used ChatGPT to write this script so the only guarantee for now is "it works on my Google Sheet(s)".
 
