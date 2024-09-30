@@ -6,7 +6,7 @@ Useful!
 **BRIEF'ISH INTRODUCTION TO WHAT IT DOES**
 
 This script fetches yesterday's Bandcamp sales automatically via the Bandcamp API and appends those to the next empty row in a Google Sheet. 
-If you'd like to start using it today, uncomment the lines in code to fetch data for a specific date range, add the data range in the cript and run the script. Comment out the date range part and the script now fetches yesterday's sales as by default.
+If you'd like to start using it today, uncomment the lines in code to fetch data for a specific date range, add the data range and run the script. Once run, comment out the date range part and the script now fetches yesterday's sales as by default.
 
 I advise you to first test the script by running it manually. 
 
