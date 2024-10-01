@@ -1,4 +1,4 @@
-# Fetch-Bandcamp-Sales-via-API-to-Google-Sheet
+# Fetch daily Bandcamp sales via API to Google Sheets
 App Script to fetch Bandcamp Sales Data once a day via API to a Google Sheet
 
 Useful!
