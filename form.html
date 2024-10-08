@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      Body{
+        font-family: Arial;
+        font-size: 12px;
+      }
+      #loading {
+        display: none;
+        font-size: 16px;
+        font-weight: bold;
+        margin-top: 10px;
+      }
+      
+      .error {
+        color: red;
+      }
+
+      .success {
+        color: green;
+        font-weight: bold;
+      }
+
+      /* Spinner style */
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        margin-left: 10px;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Bandcamp API Setup</h3>
+    <form>
+      <label for="clientId">Client ID:</label><br>
+      <input type="text" id="clientId" name="clientId"><br><br>
+      
+      <label for="clientSecret">Client Secret:</label><br>
+      <input type="text" id="clientSecret" name="clientSecret"><br><br>
+
+      <label for="startDate">Fetch Sales From (optional):</label><br>
+      <input type="date" id="startDate" name="startDate"><br><br>
+
+      <button type="button" onclick="submitForm()">Submit</button>
+    </form>
+
+    <!-- Loading message -->
+    <div id="loading">
+      Loading... Please wait. 
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Error message -->
+    <div id="error" class="error"></div>
+
+    <!-- Success message -->
+    <div id="success" class="success"></div>
+
+    <script>
+      function submitForm() {
+        // Clear previous messages
+        document.getElementById('error').innerHTML = '';
+        document.getElementById('success').innerHTML = '';
+
+        // Show the loading indicator
+        document.getElementById('loading').style.display = 'block';
+
+        // Get form data
+        const clientId = document.getElementById('clientId').value;
+        const clientSecret = document.getElementById('clientSecret').value;
+        const startDate = document.getElementById('startDate').value;
+
+        // Run the server-side function and handle the response
+        google.script.run
+          .withSuccessHandler(function() {
+            // Hide the loading indicator and show the success message
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success').innerHTML = 'Setup Complete! Sales data is being fetched.';
+          })
+          .withFailureHandler(function(error) {
+            // Hide the loading indicator and show the error message
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').innerHTML = 'Error: ' + error.message;
+          })
+          .setupBandcampAPI(clientId, clientSecret, startDate);
+      }
+    </script>
+  </body>
+</html>
