@@ -1,0 +1,514 @@
+// Show the form in a sidebar
+function showSetupForm() {
+  const htmlOutput = HtmlService.createHtmlOutputFromFile('form')
+    .setTitle('Bandcamp API Setup');
+  SpreadsheetApp.getUi().showSidebar(htmlOutput);
+}
+
+// Handle the form submission (Initial Setup)
+function setupBandcampAPI(clientId, clientSecret, startDate) {
+  try {
+    // Convert the startDate from the form into a Date object
+    var fetchDate = new Date(startDate);
+
+    // Check if the startDate is a valid date
+    if (isNaN(fetchDate.getTime())) {
+      throw new Error("Invalid date passed from the form. Please ensure the date is in the correct format.");
+    }
+
+    // Set the end date to yesterday (so it doesn't fetch today's sales)
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    // Log the form setup date range
+    Logger.log("Fetching sales from start date: " + Utilities.formatDate(fetchDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + " to yesterday: " + Utilities.formatDate(yesterday, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+
+    // Call the fetchAndProcessSales function from startDate to yesterday
+    fetchAndProcessSales(fetchDate, yesterday);
+
+    // Setup the daily trigger for future sales updates
+    setupDailyTrigger();
+  } catch (error) {
+    Logger.log('Error during setup: ' + error.message);
+    throw new Error('Failed to set up the API: ' + error.message);
+  }
+}
+
+
+
+// Function to fetch sales once, called within retry logic
+function fetchDataFromBandcamp(startDate) {
+  try {
+    Logger.log("Start fetching sales from date: " + Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+    fetchAndProcessSales(startDate);
+  } catch (error) {
+    Logger.log('Error fetching data: ' + error.message);
+    throw new Error('Failed to fetch data: ' + error.message);
+  }
+}
+
+// Retry logic for sales data fetching
+function fetchAndProcessDataWithRetry() {
+  var MAX_RETRIES = 3;  // Maximum number of retry attempts
+  var RETRY_DELAY_SECONDS = 10;  // Delay in seconds before retrying
+  var retryCount = 0;
+  var success = false;
+
+  while (!success && retryCount < MAX_RETRIES) {
+    try {
+      fetchDataFromBandcamp(new Date('2023-01-01'));  // Example date, adjust as needed
+      success = true;
+    } catch (e) {
+      Logger.log('Error: ' + e.message);
+      Logger.log('Retrying in ' + RETRY_DELAY_SECONDS + ' seconds...');
+      Utilities.sleep(RETRY_DELAY_SECONDS * 1000);  // Wait for the specified delay before retrying
+      retryCount++;
+    }
+  }
+
+  if (!success) {
+    Logger.log('Max retries reached. Script failed.');
+  }
+}
+
+// Function to fetch and process sales for a range of dates
+function fetchAndProcessSales(startDate, endDate) {
+  try {
+    // Ensure startDate and endDate are Date objects
+    if (!(startDate instanceof Date) || isNaN(startDate.getTime()) || !(endDate instanceof Date) || isNaN(endDate.getTime())) {
+      throw new Error("Invalid argument: startDate and endDate must be valid Date objects.");
+    }
+
+    Logger.log("Processing sales from: " + Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + " to " + Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+
+    // (Authorization logic remains unchanged here)
+
+    var oauthUrl = 'https://bandcamp.com/oauth_token';
+    var scriptProperties = PropertiesService.getScriptProperties();
+    var clientId = scriptProperties.getProperty('BANDCAMP_CLIENT_ID');
+    var clientSecret = scriptProperties.getProperty('BANDCAMP_CLIENT_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new Error("Client ID or Client Secret is missing.");
+    }
+
+    var payload = {
+      'grant_type': 'client_credentials',
+      'client_id': clientId,
+      'client_secret': clientSecret
+    };
+
+    var options = {
+      'method': 'post',
+      'payload': payload
+    };
+
+    var response = UrlFetchApp.fetch(oauthUrl, options);
+    var responseData = JSON.parse(response.getContentText());
+
+    if (!responseData.access_token) {
+      throw new Error('Authorization failed. Check your client ID and client secret.');
+    }
+
+    var accessToken = responseData.access_token;
+    var bandIds = getBandIds(accessToken);
+
+    if (bandIds && bandIds.length > 0) {
+      var currentDate = new Date(startDate);
+
+      // Loop through the specified date range from startDate to endDate
+      while (currentDate <= endDate) {
+        var formattedStartDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 00:00:00';
+        var formattedEndDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') + ' 23:59:59';
+
+        Logger.log("Fetching sales for date range: " + formattedStartDate + " to " + formattedEndDate);
+
+        for (var i = 0; i < bandIds.length; i++) {
+          var labelId = bandIds[i];
+          Logger.log("Processing Band ID: " + labelId);
+
+          var apiUrl = 'https://bandcamp.com/api/sales/2/sales_report';
+          var requestData = {
+            'format': 'json',
+            'start_time': formattedStartDate,
+            'end_time': formattedEndDate,
+            'band_id': labelId
+          };
+
+          var headers = {
+            'Authorization': 'Bearer ' + accessToken
+          };
+
+          var options = {
+            'method': 'post',
+            'headers': headers,
+            'contentType': 'application/json',
+            'payload': JSON.stringify(requestData)
+          };
+
+          try {
+            var response = UrlFetchApp.fetch(apiUrl, options);
+            var salesData = JSON.parse(response.getContentText());
+            Logger.log("Sales Data for " + formattedStartDate + ": " + JSON.stringify(salesData));
+
+            // Process the sales data and write to the Google Sheet
+            processSalesData(salesData);
+          } catch (error) {
+            Logger.log('Error fetching sales for ' + formattedStartDate + ': ' + error.message);
+          }
+        }
+
+        // Increment the date to the next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+    } else {
+      Logger.log('No Band IDs available.');
+    }
+  } catch (error) {
+    Logger.log('Error fetching sales: ' + error.message);
+    throw new Error('Failed to fetch sales data: ' + error.message);
+  }
+}
+
+
+
+// Function to get band IDs
+function getBandIds(accessToken) {
+  try {
+    // Set the Bandcamp Account API endpoint URL for my_bands
+    var accountApiUrl = 'https://bandcamp.com/api/account/1/my_bands';
+
+    // Set up headers with the access token
+    var headers = {
+      'Authorization': 'Bearer ' + accessToken
+    };
+
+    var options = {
+      'method': 'post',
+      'headers': headers
+    };
+
+    // Make a POST request to the my_bands endpoint
+    var accountApiResponse = UrlFetchApp.fetch(accountApiUrl, options);
+
+    // Log the entire response for debugging purposes
+    Logger.log('Account API Response: ' + accountApiResponse);
+
+    var accountData = JSON.parse(accountApiResponse.getContentText());
+
+    // Check if bands data is available
+    if (accountData && accountData.bands) {
+      // Initialize an array to store band IDs
+      var bandIds = [];
+
+      // Iterate through the list of bands and get their band IDs
+      for (var i = 0; i < accountData.bands.length; i++) {
+        var band = accountData.bands[i];
+        if (band.band_id) {
+          bandIds.push(band.band_id);
+        }
+
+        // Check if there are member bands
+        if (band.member_bands && band.member_bands.length > 0) {
+          for (var j = 0; j < band.member_bands.length; j++) {
+            var memberBand = band.member_bands[j];
+            if (memberBand.band_id) {
+              bandIds.push(memberBand.band_id);
+            }
+          }
+        }
+      }
+
+      // Log the band IDs for debugging purposes
+      Logger.log('Band IDs: ' + bandIds);
+
+      return bandIds;
+    } else {
+      Logger.log('No bands data available');
+      return [];
+    }
+  } catch (error) {
+    Logger.log('Error retrieving band IDs: ' + error.message);
+    throw new Error('Failed to retrieve band IDs: ' + error.message);
+  }
+}
+
+// Function to process sales data and write it to the "Master Sales Data" Google Sheet
+function processSalesData(salesData) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Sales Data');
+
+  if (!sheet) {
+    Logger.log("Master Sales Data sheet not found!");
+    return;
+  }
+
+  // Define headers for the sales data (matching the rowData structure)
+  var headers = [
+    "Date", "Paid To", "Item Type", "Item Name", "Artist", "Currency", "Item Price", "Quantity",
+    "Discount Code", "Sub Total", "Seller Tax", "Marketplace Tax", "Shipping", "Ship From Country",
+    "Transaction Fee", "Fee Type", "Item Total", "Amount You Received", "Bandcamp Transaction ID", 
+    "PayPal Transaction ID", "Net Amount", "Package", "Option", "Item URL", "Catalog Number", 
+    "UPC", "ISRC", "Buyer Name", "Buyer Email", "Buyer Phone", "Buyer Note", "Ship To Name", 
+    "Ship To Street", "Ship To Street 2", "Ship To City", "Ship To State", "Ship To Zip", 
+    "Ship To Country", "Ship To Country Code", "Ship Date", "Ship Notes", "Country", 
+    "Country Code", "Region or State", "City", "Referrer", "Referrer URL", "SKU"
+  ];
+
+  // Check if headers already exist in the sheet
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    Logger.log("Headers added to the Master Sales Data sheet.");
+  }
+
+  if (salesData && Object.keys(salesData).length > 0) {
+    var salesArray = [];
+
+    // Extract and format the data as needed
+    for (var saleId in salesData) {
+      var sale = salesData[saleId];
+      var rowData = [
+        sale.date,
+        sale.paid_to,
+        sale.item_type,
+        sale.item_name,
+        sale.artist,
+        sale.currency,
+        sale.item_price,
+        sale.quantity,
+        sale.discount_code,
+        sale.sub_total,
+        sale.seller_tax,
+        sale.marketplace_tax,
+        sale.shipping,
+        sale.ship_from_country_name,
+        sale.transaction_fee,
+        sale.fee_type,
+        sale.item_total,
+        sale.amount_you_received,
+        sale.bandcamp_transaction_id,
+        sale.paypal_transaction_id,
+        sale.net_amount,
+        sale.package,
+        sale.option,
+        sale.item_url,
+        sale.catalog_number,
+        sale.upc,
+        sale.isrc,
+        sale.buyer_name,
+        sale.buyer_email,
+        sale.buyer_phone,
+        sale.buyer_note,
+        sale.ship_to_name,
+        sale.ship_to_street,
+        sale.ship_to_street_2,
+        sale.ship_to_city,
+        sale.ship_to_state,
+        sale.ship_to_zip,
+        sale.ship_to_country,
+        sale.ship_to_country_code,
+        sale.ship_date,
+        sale.ship_notes,
+        sale.country,
+        sale.country_code,
+        sale.region_or_state,
+        sale.city,
+        sale.referer,
+        sale.referer_url,
+        sale.sku
+      ];
+      salesArray.push(rowData);
+    }
+
+    // Append the sales data to the correct sheet, starting from the next available row
+    var lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, salesArray.length, salesArray[0].length).setValues(salesArray);
+
+    Logger.log("Sales data successfully written to the Master Sales Data sheet.");
+  } else {
+    Logger.log('No sales data found for the specified date.');
+  }
+}
+
+// Function to setup a daily trigger
+function setupDailyTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'fetchAndProcessSalesDaily') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+
+  // Set up a new trigger to run daily
+  ScriptApp.newTrigger('fetchAndProcessSalesDaily')
+    .timeBased()
+    .everyDays(1)
+    .atHour(1)  // Run at 1 AM
+    .create();
+}
+
+
+// Function to fetch sales daily (for the trigger)
+function fetchAndProcessSalesDaily() {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  // Log the date being fetched
+  Logger.log("Fetching sales data for yesterday: " + Utilities.formatDate(yesterday, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+
+  // Call fetchAndProcessSales with yesterday as both startDate and endDate
+  fetchAndProcessSales(yesterday, yesterday);  // Only fetch for yesterday
+}
+
+
+
+
+// Fucntion to create release tracking sheets
+function createReleaseTrackingSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var templateSheet = ss.getSheetByName('Template Release Sheet'); // Template sheet
+  var croppedSalesSheet = ss.getSheetByName('Cropped sales data'); // Cropped Sales Data Sheet
+
+  // Get all unique catalogue numbers from the Cropped Sales Data sheet (column F starting from row 2)
+  var catalogueNumbersData = croppedSalesSheet.getRange("F2:F").getValues().filter(String);
+  var uniqueCatalogueNumbers = [...new Set(catalogueNumbersData.map(catalogue => catalogue[0]))]; // Extract unique catalogue numbers
+
+  // Loop through unique catalogue numbers and create tracking sheets for each release
+  uniqueCatalogueNumbers.forEach(function(catalogueNumber) {
+    var newSheetName = 'Release ' + catalogueNumber;
+
+    // Check if the sheet already exists for the catalogue number
+    var newSheet = ss.getSheetByName(newSheetName);
+    if (newSheet == null) {
+      // Create a new sheet by copying the template
+      newSheet = templateSheet.copyTo(ss).setName(newSheetName);
+
+      // Set the catalogue number in cell B1
+      newSheet.getRange('B1').setValue(catalogueNumber);
+    }
+  });
+   // Notify the user once creation is complete
+  ss.toast('Release sheets created!', 'Creating release sheets complete', 5);
+}
+
+
+// Function to sort release sheets alphabetically
+function sortReleaseSheetsAlphabetically() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets().filter(sheet => sheet.getName().startsWith('Release'));
+
+  // Sort the release sheets by their names alphabetically
+  sheets.sort((a, b) => a.getName().localeCompare(b.getName()));
+
+  // Reorder the sheets in the spreadsheet based on the sorted order
+  sheets.forEach(function(sheet, index) {
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(index + 1);
+  });
+
+  // Notify the user once sorting is complete
+  ss.toast('Release sheets sorted alphabetically!', 'Sorting complete', 5);
+}
+
+// Function to set up a daily trigger for royalties update
+function setupDailyRoyaltiesUpdateTrigger() {
+  // First, clear any existing triggers to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'generateRoyaltiesDueSheet') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Set up a new trigger to refresh royalties daily
+  ScriptApp.newTrigger('generateRoyaltiesDueSheet')
+    .timeBased()
+    .everyDays(1)
+    .atHour(1)  // Set the hour of the day (1 = 1 AM)
+    .create();
+}
+
+// Function to generate the Royalties Due sheet without touching layout
+function generateRoyaltiesDueSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var summarySheet = ss.getSheetByName('Royalties Due') || ss.insertSheet('Royalties Due');
+
+  // Clear only the data below the headers, retaining formatting and layout
+  var lastRow = summarySheet.getLastRow();
+  var lastColumn = summarySheet.getLastColumn();
+  
+  if (lastRow > 1) {
+    summarySheet.getRange(2, 1, lastRow - 1, lastColumn).clearContent(); // Clear only content, retain formatting
+  }
+
+  // Set headers if they don't exist
+  var headers = ['Cat Number', 'H1 2024', 'H2 2024', 'H1 2025', 'H2 2025', 'H1 2026', 'H2 2026', 'H1 2027', 'H2 2027', 'H1 2028', 'H2 2028', 'Total'];
+  if (summarySheet.getRange(1, 1, 1, headers.length).getValues()[0][0] !== headers[0]) {
+    summarySheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+
+  var sheets = ss.getSheets();
+  var row = 2; // Start adding data from row 2 (below the headers)
+
+  // Loop through each sheet in the spreadsheet
+  sheets.forEach(function(sheet) {
+    var sheetName = sheet.getName();
+
+    // Only process sheets whose name starts with "Release"
+    if (sheetName.startsWith('Release')) {
+      var catNumber = sheet.getRange('B1').getValue(); // Assuming catalogue number is in B1
+
+      // Retrieve royalties for each half-year period
+      var royalties = [
+        sheet.getRange('Q5').getValue(), // H1 2024
+        sheet.getRange('Q6').getValue(), // H2 2024
+        sheet.getRange('Q7').getValue(), // H1 2025
+        sheet.getRange('Q8').getValue(), // H2 2025
+        sheet.getRange('Q9').getValue(), // H1 2026
+        sheet.getRange('Q10').getValue(), // H2 2026
+        sheet.getRange('Q11').getValue(), // H1 2027
+        sheet.getRange('Q12').getValue(), // H2 2027
+        sheet.getRange('Q13').getValue(), // H1 2028
+        sheet.getRange('Q14').getValue()  // H2 2028
+      ];
+
+      // Calculate total royalties for the release
+      var totalRoyalties = royalties.reduce(function(acc, val) {
+        return acc + (isNaN(val) ? 0 : val);
+      }, 0);
+
+      // Append the data to the summary sheet
+      var rowData = [catNumber].concat(royalties).concat([totalRoyalties]);
+      summarySheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
+
+      row++;
+    }
+  });
+
+  // Add totals row
+  lastRow = summarySheet.getLastRow();
+  summarySheet.getRange(lastRow + 1, 1).setValue('Totals:');
+  for (var col = 2; col <= 12; col++) {
+    summarySheet.getRange(lastRow + 1, col).setFormula(`=SUM(${String.fromCharCode(64 + col)}2:${String.fromCharCode(64 + col)}${lastRow})`);
+  }
+  
+}
+
+
+// Create the Bandcamp Tools menu
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Bandcamp Tools')
+    .addItem('Setup API and Get Sales Data', 'showSetupForm')
+    .addItem('Generate Release Sheets', 'createReleaseTrackingSheet')
+    .addItem('Sort Release Sheets Alphabetically', 'sortReleaseSheetsAlphabetically')
+    .addItem('Generate Royalties Due Sheet', 'generateRoyaltiesDueSheet')
+    .addToUi();
+    
+  // Automatically set up the daily trigger for royalties update when the sheet is opened
+  setupDailyRoyaltiesUpdateTrigger();
+}
+
+
